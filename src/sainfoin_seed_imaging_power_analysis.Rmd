@@ -1,0 +1,167 @@
+---
+title: "sainfoin seed imaging data analysis"
+author: "Bo Meyering"
+date: "2023-08-22"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Analysis
+```{r library import}
+library(tidyverse)
+library(data.table)
+library(readxl)
+```
+
+```{r data import}
+# names = read_xlsx("../data/power_analysis/SainfoinDepoddingExp.xlsx", 
+#                    sheet = "Sheet1", 
+#                    col_types = c("text", 
+#                                  "numeric", 
+#                                  "text", 
+#                                  "numeric", 
+#                                  "text", 
+#                                  "numeric", 
+#                                  "numeric", 
+#                                  "skip"), 
+#                    na = "NA")
+
+names = read_excel("../data/power_analysis/SainfoinDepoddingExp.xlsx", 
+                   sheet = "Sheet1", 
+                   col_types = c("text", 
+                                 "numeric", 
+                                 "text", 
+                                 "numeric", 
+                                 "text", 
+                                 "numeric", 
+                                 "numeric", 
+                                 "skip"), 
+                   na = "NA")
+
+raw_data <- fread("../data/power_analysis/results.csv")
+
+
+
+```
+
+```{r data cleaning}
+clean_names <- names
+clean_names$QR_rand[clean_names$QR_rand=='4.6E+043'] <- '46e43'
+clean_names$QR_rand[clean_names$QR_rand=='7.2E+068'] <- '72e68'
+
+clean_data <- raw_data %>% 
+        separate(img_id, into = c(NA, NA, NA, 'img_id'), sep = '/') %>% 
+        mutate(across(img_id, \(x) str_replace(x, '.jpg', '')),
+               across(img_id, \(x) str_replace(x, '.JPG', '')))
+clean_data$img_id[clean_data$img_id=='4.6e+43'] <- '46e43'
+clean_data$img_id[clean_data$img_id=='7.2e+68'] <- '72e68'
+
+combined <- clean_names %>% 
+        full_join(clean_data, by = c("QR_rand"="img_id")) %>% 
+        rename('img_id' = 'QR_rand',
+               'variety' = 'Variety',
+               'sample_mass' = 'Sample Mass',
+               'method' = 'Method',
+               'rep' = 'Rep')
+```
+
+```{r data summaries}
+comb_sum <- combined %>% 
+        group_by(variety, sample_mass, method, rep, img_id, class) %>% 
+        summarise(count = n()) %>% 
+        spread(key=class, value=count) %>% 
+        mutate(split = replace_na(split, 0), 
+               split = ceiling(split/2)) %>% 
+        replace_na(replace = list(0)) %>% 
+        mutate(sum = rowSums(across(pod:split)),
+               p_pod = pod/sum,
+               p_seed = seed/sum,
+               p_split = split/sum) %>% 
+        ungroup() %>% 
+        mutate_at('sample_mass', factor) %>% 
+        mutate_at('rep', factor)
+
+
+estimates = comb_sum %>% 
+        gather(key = 'class', value = 'prop', p_pod:p_split) %>% 
+        group_by(variety, sample_mass, method, class) %>% 
+        summarise(est = mean(prop),
+                  est_sd = sd(prop),
+                  cv = est_sd/est) %>% 
+        arrange(variety, method, sample_mass)
+```
+```{r}
+seed_estimates <- estimates %>% 
+        filter(class=='p_seed')
+
+pod_estimates <- estimates %>% 
+        filter(class=='p_pod')
+
+split_estimates <- estimates %>% 
+        filter(class=='p_split')
+```
+
+
+```{r seed_graphs, echo=FALSE}
+ggplot(seed_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
+        geom_line()+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'CV of Estimates', title='Seed Proportions\nCoefficient of Variation by Variety')
+
+ggplot(seed_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
+        geom_line()+
+        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'Mean Estimates', title='Seed Proportions\nEstimates and SD by Variety')
+```
+
+
+```{r pod_graphs, echo=FALSE}
+ggplot(pod_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
+        geom_line()+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'CV of Estimates', title='Pod Proportions\nCoefficient of Variation by Variety')
+
+ggplot(pod_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
+        geom_line()+
+        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'Mean Estimates', title='Pod Proportions\nEstimates and SD by Variety')
+```
+
+```{r split_graphs, echo=FALSE}
+ggplot(split_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
+        geom_line()+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'CV of Estimates', title='Split Proportions\nCoefficient of Variation by Variety')
+
+ggplot(split_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
+        geom_line()+
+        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
+        facet_wrap(~variety)+
+        labs(x='Sample Mass', y = 'Mean Estimates', title='Split Proportions\nEstimates and SD by Variety')
+```
+
+```{r}
+VAR = "Rocky Mountain Remont"
+METHOD = "BT3X"
+
+data_sub <- filter(comb_sum, variety==VAR, method==METHOD)
+lm_seed <- lmer(p_seed ~ sample_mass + (1|rep), data = data_sub)
+lm_pod <- lmer(p_pod ~ sample_mass + (1|rep), data = data_sub)
+lm_split <- lmer(p_split ~ sample_mass + (1|rep), data = data_sub)
+glm_seed <- glm(p_seed ~ sample_mass, data = data_sub, family='binomial')
+print("SEED CLD")
+cld(emmeans(glm_seed, ~ sample_mass), Letters = letters, reversed = TRUE)
+print("POD CLD")
+cld(emmeans(lm_pod, ~ sample_mass), Letters = letters, reversed = TRUE)
+print("SPLIT CLD")
+cld(emmeans(lm_split, ~ sample_mass), Letters = letters, reversed = TRUE)
+
+```
+
