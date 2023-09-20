@@ -13,7 +13,8 @@ test_dir = './data/test'
 filenames = [i.split('/')[-1] for i in glob(img_dir+'/*')]
 
 # Read in data
-df = pd.read_csv('data/power_analysis/img_data.csv')
+# df = pd.read_csv('data/power_analysis/img_data.csv')
+df = pd.read_csv('./data/power_analysis/img_data.csv')
 
 # Set train/validation 80:20 splits, stratified over experimental factors
 train, val = train_test_split(df, test_size=.2, train_size=.8, random_state=345, stratify=df[['variety', 'method', 'sample_mass_g']])

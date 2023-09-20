@@ -3,6 +3,7 @@ import logging
 from tqdm import tqdm
 import numpy as np
 import time
+import torch.nn as nn
 
 from config import device, n_epochs
 
@@ -11,6 +12,7 @@ def _train(model, optimizer, device, data_loader):
   
   prog_bar = tqdm(data_loader, total=len(data_loader))
   loss_list = []
+  ind_loss_list = []
 
   for i, data in enumerate(prog_bar):
     optimizer.zero_grad()
@@ -25,7 +27,9 @@ def _train(model, optimizer, device, data_loader):
 
     loss_value = losses.item()
     loss_list.append(loss_value)
+    ind_loss_list.append(loss_dict)
     losses.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), 4.0)
     optimizer.step()
     prog_bar.set_description(desc=f"Train Loss: {loss_value: .4f}")
 
@@ -36,6 +40,7 @@ def _validate(model, device, data_loader):
   
   prog_bar = tqdm(data_loader, total=len(data_loader))
   loss_list = []
+  ind_loss_list = []
 
   for i, data in enumerate(prog_bar):
     images, targets = data
@@ -48,6 +53,7 @@ def _validate(model, device, data_loader):
     losses = sum(loss for loss in loss_dict.values())
     loss_value = losses.item()
     loss_list.append(loss_value)
+    ind_loss_list.append(loss_dict)
     prog_bar.set_description(desc=f"Val Loss: {loss_value:.4f}")
 
   return loss_list
@@ -74,7 +80,7 @@ def train_model(model, optimizer, scheduler, n_epochs, device, train_loader, val
     writer.add_scalar('val_loss', avg_val_loss, epoch)
     scheduler.step()
     time.sleep(5)
-    if epoch==(n_epochs):
-      torch.save(model.state_dict(), f"./model_chkpt/model{epoch}_{model_name}.pth")
+    if epoch % 2 == 0:
+      torch.save(model.state_dict(), f"./model_chkpt/{model_name}/{model_name}_{epoch}.pth")
 
   return train_loss_list, val_loss_list, lr_list

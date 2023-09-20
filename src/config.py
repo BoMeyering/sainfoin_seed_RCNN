@@ -1,4 +1,5 @@
 import yaml
+import torch
 
 train_dir = './data/train'
 val_dir = './data/val'
@@ -7,9 +8,10 @@ annotation_dir = './data/annotations'
 chkpt_dir = './model_chkpt'
 tensorboard_dir = './runs'
 log_dir = './logs'
+inference_dir = './inference'
 
-device = 'cuda'
-cores = 2
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+cores = 4
 classes = {
     '0': 'background',
     '1': 'split',
@@ -18,11 +20,13 @@ classes = {
 }
 n_classes = 4
 resize_to = 3000
-n_epochs = 100
-batch_size = 4
-base_name = 'sainfoin_seed'
+n_epochs = 50
+batch_size = 1
+# base_name = 'sainfoin_seed'
+base_name = 'hp_test'
 lr = 0.01
-momentum = 0.8
+# lr = 0.02
+momentum = 0.9
 gamma = 0.9
 
 

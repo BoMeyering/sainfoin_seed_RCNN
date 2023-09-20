@@ -8,9 +8,10 @@ def train_transforms():
     """
 
     return A.Compose([
-        A.RandomBrightnessContrast(p=0.2),
+        A.RandomBrightnessContrast(p=0.4),
+        # A.augmentations.geometric.transforms.GridDistortion(p=0.5),
         # A.CenterCrop(width=1000, height=1000, min_visibility=.8, p = .5),
-        # A.RandomSizedBBoxSafeCrop(height=1000, width=1000, erosion_rate=0, interpolation=1, p=1),
+        # A.RandomSizedBBoxSafeCrop(height=3000, width=3000, erosion_rate=0, interpolation=1, p=.5),
         A.Flip(p=0.5),
         A.RandomRotate90(p=0.5),
         A.MotionBlur(p=0.2),
