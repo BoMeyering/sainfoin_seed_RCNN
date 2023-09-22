@@ -1,7 +1,7 @@
 import logging
 import datetime
 
-def create_logger():
+def create_logger(output_file: str=None):
     """
     
     """
@@ -12,17 +12,19 @@ def create_logger():
 
     logger.setLevel(logging.DEBUG)
 
-    s_handler = logging.StreamHandler()
-    f_handler = logging.FileHandler(f'./logs/app_{today}.log')
-
-    s_handler.setLevel(logging.DEBUG)
-    f_handler.setLevel(logging.DEBUG)
-
     formatter = logging.Formatter('%(asctime)s:%(name)s:%(levelname)s: - %(message)s')
-    s_handler.setFormatter(formatter)
-    f_handler.setFormatter(formatter)
 
+    # Set stream level configurations
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.DEBUG)
+    s_handler.setFormatter(formatter)
+    
     logger.addHandler(s_handler)
-    logger.addHandler(f_handler)
+
+    if output_file is not None:
+        f_handler = logging.FileHandler(f'./logs/app_{today}.log')
+        f_handler.setLevel(logging.DEBUG)
+        f_handler.setFormatter(formatter)
+        logger.addHandler(f_handler)
 
     return logger

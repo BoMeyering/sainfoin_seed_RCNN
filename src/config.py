@@ -1,10 +1,10 @@
 import yaml
 import torch
 
-train_dir = './data/train'
-val_dir = './data/val'
-test_dir = './data/test'
-annotation_dir = './data/annotations'
+train_dir = './data/images/train'
+val_dir = './data/images/val'
+test_dir = './data/images/test'
+annotation_path = './data/annotations/coco_annotations.json'
 chkpt_dir = './model_chkpt'
 tensorboard_dir = './runs'
 log_dir = './logs'
@@ -20,7 +20,7 @@ classes = {
 }
 n_classes = 4
 resize_to = 3000
-n_epochs = 50
+n_epochs = 25
 batch_size = 1
 # base_name = 'sainfoin_seed'
 base_name = 'hp_test'
