@@ -20,12 +20,11 @@ classes = {
 }
 n_classes = 4
 resize_to = 3000
-n_epochs = 25
+n_epochs = 50
 batch_size = 1
 # base_name = 'sainfoin_seed'
 base_name = 'hp_test'
-lr = 0.01
-# lr = 0.02
+lr = 0.05
 momentum = 0.9
 gamma = 0.9
 
