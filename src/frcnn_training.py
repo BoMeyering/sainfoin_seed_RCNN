@@ -9,6 +9,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchmetrics.detection import IntersectionOverUnion, MeanAveragePrecision
 
 
 # local script imports
@@ -17,7 +18,7 @@ from config import chkpt_dir, tensorboard_dir, log_dir, inference_dir
 from config import device, cores, classes, n_classes, resize_to
 from config import n_epochs, batch_size, lr, momentum, gamma, base_name
 from model.model import create_model
-from model.train_val import train_model
+from model.train_val import train_model, _iou_metrics, _map_metrics
 from utils.dataset import SeedDataset, dir_sampler
 from utils.loggers import create_logger
 from utils.transforms import train_transforms, val_transforms, collate_fn
@@ -52,8 +53,8 @@ logger.info("MODEL_CONFIG\n"+"\n".join(model_config))
 
 
 # Set proportion sizes for subsampling the data
-# sizes = [0.05, 0.1, 0.2, 0.5, 1.0]
-sizes = [1.0]
+sizes = [0.05, 0.1, 0.2, 0.5, 1.0]
+# sizes = [0.05]
 
 img_data = pd.read_csv('./data/seed_weights.csv')
 train_imgs = img_data.loc[img_data['class']=='train']
@@ -63,7 +64,7 @@ logger.info("Starting training scenarios.")
 
 for size in sizes:
     today = str(datetime.date.today())
-    writer = SummaryWriter(os.path.join(tensorboard_dir, f"{base_name}_{size}_{lr}_{today}"))
+    writer = SummaryWriter(os.path.join(tensorboard_dir, f"{base_name}_p{size}_lr{lr}_{today}"))
     logger.info("Starting Tensorboard Summary Writer.")
     logger.info(f"Scenario {sizes.index(size)+1}: training on imageset of {img_data.shape[0]*size}")
     logger.info(f"Creating train/validation splits for {size*100}% of the imageset in an 80/20 train/val split")
@@ -143,4 +144,45 @@ for size in sizes:
         model_name=model_name
     )
 
+    # Calculate metrics for each model
+    model.eval()
+
+    # Instantiate metrics
+    iou_metric = IntersectionOverUnion(iou_threshold=0.5, class_metrics=True, respect_labels=True)
+    map_metric = MeanAveragePrecision(iou_type='bbox', class_metrics=True, max_detection_thresholds=[100, 250, 500])
+
+    # Calculate IOU
+    try:
+        iou = _iou_metrics(model=model, device=device, data_loader=val_loader, metric=iou_metric)
+        map_avgs, map_class_avg, mar_class_avg = _map_metrics(model=model, device=device, data_loader=val_loader, metric=map_metric)
+        
+        avg_iou = iou['iou'].item()
+        split_iou = iou['iou/cl_1'].item()
+        seed_iou = iou['iou/cl_2'].item()
+        pod_iou = iou['iou/cl_3'].item()
+
+        writer.add_scalar('avg_iou', avg_iou)
+        writer.add_scalar('split_iou', split_iou)
+        writer.add_scalar('seed_iou', seed_iou)
+        writer.add_scalar('pod_iou', pod_iou)
+
+        writer.add_scalar('map_avg', map_avgs['map'])
+        writer.add_scalar('map_50', map_avgs['map_50'])
+        writer.add_scalar('map_75', map_avgs['map_75'])
+        writer.add_scalar('map_small', map_avgs['map_small'])
+        writer.add_scalar('map_medium', map_avgs['map_medium'])
+        writer.add_scalar('mar_small', map_avgs['mar_small'])
+        writer.add_scalar('mar_medium', map_avgs['mar_medium'])
+        
+        writer.add_scalar('map_split', map_class_avg['1'])
+        writer.add_scalar('map_seed', map_class_avg['2'])
+        writer.add_scalar('map_pod', map_class_avg['3'])
+
+        writer.add_scalar('mar_split', mar_class_avg['1'])
+        writer.add_scalar('mar_seed', mar_class_avg['2'])
+        writer.add_scalar('mar_pod', mar_class_avg['3'])
+    except Exception as e:
+       print(e)
+
+    writer.flush()
     writer.close()

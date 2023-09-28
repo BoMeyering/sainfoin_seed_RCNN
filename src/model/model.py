@@ -2,7 +2,6 @@ import torchvision
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-
 def create_model(n_classes: int, n_obj_det: int):
     """
     Returns a pretrained Faster RCNN with anchor sizes set up
@@ -34,3 +33,4 @@ def create_model(n_classes: int, n_obj_det: int):
     model.rpn.anchor_generator = anchor_generator
 
     return model
+    
