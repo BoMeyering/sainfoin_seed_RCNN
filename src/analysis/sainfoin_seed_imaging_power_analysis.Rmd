@@ -12,156 +12,615 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ### Analysis
-```{r library import}
+```{r library import, message=FALSE}
 library(tidyverse)
 library(data.table)
 library(readxl)
+library(pwr)
+library(lme4)
+library(multcomp)
+library(lmerTest)
+library(multcompView)
+library(aTSA)
+library(caret)
+library(emmeans)
+library(ResourceSelection)
+library(fmsb)
 ```
 
 ```{r data import}
-# names = read_xlsx("../data/power_analysis/SainfoinDepoddingExp.xlsx", 
-#                    sheet = "Sheet1", 
-#                    col_types = c("text", 
-#                                  "numeric", 
-#                                  "text", 
-#                                  "numeric", 
-#                                  "text", 
-#                                  "numeric", 
-#                                  "numeric", 
-#                                  "skip"), 
-#                    na = "NA")
+objects <- fread("../../data/power_analysis/object_counts.csv") %>% 
+        dplyr::select(-V1)
+img_data <- fread("../../data/power_analysis/seed_weights.csv") %>% 
+        dplyr::select(-V1)
 
-names = read_excel("../data/power_analysis/SainfoinDepoddingExp.xlsx", 
-                   sheet = "Sheet1", 
-                   col_types = c("text", 
-                                 "numeric", 
-                                 "text", 
-                                 "numeric", 
-                                 "text", 
-                                 "numeric", 
-                                 "numeric", 
-                                 "skip"), 
-                   na = "NA")
-
-raw_data <- fread("../data/power_analysis/results.csv")
-
-
+dl_metrics <- fread('../../data/power_analysis/model_metrics.csv')
+train_loss <- fread('../../data/power_analysis/train_loss.csv')
+val_loss <- fread('../../data/power_analysis/val_loss.csv')
 
 ```
+
+```{r}
+dl_metrics$size <- factor(dl_metrics$size)
+train_loss$size <- factor(train_loss$size)
+val_loss$size <- factor(val_loss$size)
+
+breaks <- c(0, 100, 200, 300, 400, 500)
+train_vec <- as.vector(train_loss$loss)
+val_vec <- as.vector(val_loss$loss)
+train_smooth_vec <- c()
+val_smooth_vec <- c()
+for(i in 1:(length(c(0, 100, 200, 300, 400, 500))-1)){
+        lower <- breaks[i]+1
+        upper <- breaks[i+1]
+        train_smoothed <- expsmooth(train_vec[lower:upper], alpha=.5, plot=FALSE)$estimate
+        val_smoothed <- expsmooth(val_vec[lower:upper], alpha=.5, plot=FALSE)$estimate
+        train_smooth_vec <- c(train_smooth_vec, train_smoothed)
+        val_smooth_vec <- c(val_smooth_vec, val_smoothed)
+}
+
+train_loss$smooth_loss <- train_smooth_vec
+train_loss$class <- 'train'
+val_loss$smooth_loss <- val_smooth_vec
+val_loss$class <- 'val'
+
+total_loss <- rbind(train_loss, val_loss) 
+        # pivot_wider(names_from=class,
+        #             values_from=c(smooth_loss, loss))
+
+ggplot(train_loss, aes(x=step, y = smooth_loss, color=size))+
+        geom_line(size=1.5)+
+        ylim(c(.15, 1))+
+        scale_color_viridis_d(option = 'D', begin=.2, end = .8)
+
+ggplot(val_loss, aes(x=step, y = smooth_loss, color=size))+
+        geom_line(size=1.5)+
+        ylim(c(.15, 1))+
+        scale_color_viridis_d(option = 'D', begin=.2, end = .8)
+
+
+ggplot(total_loss, aes(x=step, y=smooth_loss, color=class))+
+        geom_line()+
+        facet_wrap(~size)+
+        scale_color_viridis_d(option = 'D', begin=.2, end = .8)+
+        labs(x='Epoch', y='Loss', color='Class')
+
+```
+
+```{r}
+ggplot(filter(dl_metrics, str_detect(metric, 'iou')), aes(x=size, y=value, color=metric, group=metric))+
+        geom_point(size=2, alpha = .5)+
+        geom_line(size=2, alpha=.7)+
+        scale_color_viridis_d(option = 'D')+
+        labs(x='Dataset proportion',
+             y="Metric Value")
+
+ggplot(filter(dl_metrics, str_detect(metric, 'map')), aes(x=size, y=value, color=metric, group=metric))+
+        geom_point(size=2, alpha = .5)+
+        geom_line(size=2, alpha=.7)+
+        scale_color_viridis_d(option = 'D', begin = .2, end=.8)+
+        labs(x='Dataset proportion',
+             y="Metric Value")
+```
+
 
 ```{r data cleaning}
-clean_names <- names
-clean_names$QR_rand[clean_names$QR_rand=='4.6E+043'] <- '46e43'
-clean_names$QR_rand[clean_names$QR_rand=='7.2E+068'] <- '72e68'
+combined_data <- img_data %>% 
+        full_join(objects, by = "img_name") %>% 
+        mutate(split = ceiling(split/2),
+               total_seeds = rowSums(across(c(split, seed, pod)))) %>% 
+        mutate(p_split = split/total_seeds,
+               p_seed = seed/total_seeds,
+               p_pod = pod/total_seeds) %>% 
+        arrange(variety, method, sample_mass_g, rep)
 
-clean_data <- raw_data %>% 
-        separate(img_id, into = c(NA, NA, NA, 'img_id'), sep = '/') %>% 
-        mutate(across(img_id, \(x) str_replace(x, '.jpg', '')),
-               across(img_id, \(x) str_replace(x, '.JPG', '')))
-clean_data$img_id[clean_data$img_id=='4.6e+43'] <- '46e43'
-clean_data$img_id[clean_data$img_id=='7.2e+68'] <- '72e68'
+combined_data$exp_group <- rep(1:50, each=10)
 
-combined <- clean_names %>% 
-        full_join(clean_data, by = c("QR_rand"="img_id")) %>% 
-        rename('img_id' = 'QR_rand',
-               'variety' = 'Variety',
-               'sample_mass' = 'Sample Mass',
-               'method' = 'Method',
-               'rep' = 'Rep')
+combined_data$sample_mass_g <- factor(combined_data$sample_mass_g)
+combined_data$variety <- factor(combined_data$variety)
+
+sum_data <- combined_data %>% 
+        group_by(variety, sample_mass_g, method) %>% 
+        summarize(mean_split = mean(p_split),
+                  mean_seed = mean(p_seed), 
+                  mean_pod = mean(p_pod),
+                  sd_split = sd(p_split),
+                  sd_seed = sd(p_seed),
+                  sd_pod = sd(p_pod))
+sum_data$sample_mass_g <- factor(sum_data$sample_mass_g)
 ```
 
-```{r data summaries}
-comb_sum <- combined %>% 
-        group_by(variety, sample_mass, method, rep, img_id, class) %>% 
-        summarise(count = n()) %>% 
-        spread(key=class, value=count) %>% 
-        mutate(split = replace_na(split, 0), 
-               split = ceiling(split/2)) %>% 
-        replace_na(replace = list(0)) %>% 
-        mutate(sum = rowSums(across(pod:split)),
-               p_pod = pod/sum,
-               p_seed = seed/sum,
-               p_split = split/sum) %>% 
+```{r seed count EDA}
+
+# Calculate the seeds per gram for each variety
+sd_per_g <- combined_data %>% 
+        group_by(sample_mass_g, variety) %>% 
+        summarize(mean = mean(total_seeds)) %>% 
+        mutate(sdpg = mean/as.numeric(sample_mass_g)) %>% 
         ungroup() %>% 
-        mutate_at('sample_mass', factor) %>% 
-        mutate_at('rep', factor)
+        group_by(variety) %>% 
+        summarize(mean = mean(sdpg))
 
+linear_response_p <- ggplot(combined_data, aes(x = as.numeric(sample_mass_g), y = total_seeds, color = variety))+
+        geom_point(size=2, alpha=.5)+
+        geom_smooth(method='lm', se=FALSE)+
+        scale_color_viridis_d(option='D', begin=.1, end=.9)+
+        labs(x = 'Sample Mass (g)',
+             y = 'Total Object Count', 
+             color = 'Variety',
+             title = 'Predicted object counts by Sample Mass and Variety')
 
-estimates = comb_sum %>% 
-        gather(key = 'class', value = 'prop', p_pod:p_split) %>% 
-        group_by(variety, sample_mass, method, class) %>% 
-        summarise(est = mean(prop),
-                  est_sd = sd(prop),
-                  cv = est_sd/est) %>% 
-        arrange(variety, method, sample_mass)
+seed_density_p <- ggplot(combined_data, aes(x=total_seeds, fill=sample_mass_g))+
+        geom_density()+
+        scale_fill_viridis_d(option='D', begin=.1, end=.9)+
+        facet_wrap(~variety)+
+        labs(x='Total Seed Objects',
+             y='Density',
+             fill='Sample Mass (g)')
+
 ```
+
+```{r total seed count modeling}
+
+# Create train and validation splits
+train <- combined_data %>% 
+        filter(class=='train')
+val <- combined_data %>% 
+        filter(class=='val')
+
+# fit the model
+glm_count_1 <- glm(total_seeds ~ variety * legume_fruit_mass_g, data=train)
+glm_count_2<- glm(total_seeds ~ variety * legume_fruit_mass_g, data=train, family=poisson(link = 'log'))
+
+# Predict on the validation set
+glm_count_1_pred <- predict(glm_count_1, val)
+glm_count_2_pred <- predict(glm_count_2, val, type='response')
+
+# Calculate RMSE and MAE
+RMSE(glm_count_1_pred, val$total_seeds)
+RMSE(glm_count_2_pred, val$total_seeds)
+
+MAE(glm_count_1_pred, val$total_seeds)
+MAE(glm_count_2_pred, val$total_seeds)
+
+# Refit the best model on all the data
+seed_model <- glm(total_seeds ~ variety * legume_fruit_mass_g, data=combined_data)
+```
+
+```{r glm modeling}
+glm_pod <- glm(p_pod ~ variety * method * sample_mass_g, data=combined_data, weights=total_seeds, family=binomial(link='logit'))
+glm_seed <- glm(p_seed ~ variety * method * sample_mass_g, data=combined_data, weights=total_seeds, family=binomial(link='logit'))
+glm_split <- glm(p_split ~ variety * method * sample_mass_g, data=combined_data, weights=total_seeds, family=binomial(link='logit'))
+
+# Likelihood Ratio Tests over Null Model
+pod_lrt = 1 - pchisq(
+        q = glm_pod$null.deviance - glm_pod$deviance, 
+        df = glm_pod$df.null - glm_pod$df.residual
+        )
+
+seed_lrt = 1 - pchisq(
+        q = glm_seed$null.deviance - glm_seed$deviance, 
+        df = glm_seed$df.null - glm_seed$df.residual
+        )
+
+split_lrt = 1 - pchisq(
+        q = glm_seed$null.deviance - glm_seed$deviance, 
+        df = glm_seed$df.null - glm_seed$df.residual
+        )
+
+# Hoslem-Lemeshow test for logistic Goodness of Fit
+pod_gof <- hoslem.test(
+        combined_data$p_pod,
+        fitted(glm_pod)
+        )
+
+seed_gof <- hoslem.test(
+        combined_data$p_seed,
+        fitted(glm_seed)
+        )
+
+split_gof <- hoslem.test(
+        combined_data$p_split,
+        fitted(glm_split)
+        )
+
+# Nagelkerke pseudo-R2
+pod_r2 <- NagelkerkeR2(glm_pod)
+seed_r2 <- NagelkerkeR2(glm_seed)
+split_r2 <- NagelkerkeR2(glm_split)
+
+# GLM ANOVA
+anova(glm_pod, test='Chisq')
+anova(glm_seed, test='Chisq')
+anova(glm_split, test='Chisq')
+
+# Calculate the estimated marginal means conditioned on variety
+pod_emm <- emmeans(glm_pod, ~ method:sample_mass_g | variety, type='response')
+seed_emm <- emmeans(glm_seed, ~ method:sample_mass_g | variety, type='response')
+split_emm <- emmeans(glm_split, ~ method:sample_mass_g | variety, type='response')
+
+# Get the connecting letters report
+pod_cld <- cld(pod_emm, Letters = letters, decreasing = T)
+seed_cld <- cld(seed_emm, Letters = letters, decreasing = T)
+split_cld <- cld(split_emm, Letters = letters, decreasing = T)
+
+# Draw graphs for proportional changes
+pod_means_p <- ggplot(pod_cld, aes(x = sample_mass_g, y = prob, group=method, color=method, label=str_trim(.group)))+
+        geom_point(size=2, alpha=.5)+
+        geom_line()+
+        geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL), width=.2, linetype='solid')+
+        geom_text(aes(y=asymp.UCL + 0.02), color='black', size=4)+
+        facet_wrap(~variety)+
+        labs(x = 'Sample Mass (g)',
+             y = 'Mean Pod Proportion',
+             color='Threshing Method')+
+        scale_color_viridis_d(option='C', begin=.3, end=.6)
+
+seed_means_p <- ggplot(seed_cld, aes(x = sample_mass_g, y = prob, group=method, color=method, label=str_trim(.group)))+
+        geom_point(size=2, alpha=.5)+
+        geom_line()+
+        geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL), width=.2, linetype='solid')+
+        geom_text(aes(y=asymp.UCL + 0.02), color='black', size=4)+
+        facet_wrap(~variety)+
+        labs(x = 'Sample Mass (g)',
+             y = 'Mean Seed Proportion',
+             color='Threshing Method')+
+        scale_color_viridis_d(option='C', begin=.3, end=.6)
+
+split_means_p <- ggplot(split_cld, aes(x = sample_mass_g, y = prob, group=method, color=method, label=str_trim(.group)))+
+        geom_point(size=2, alpha=.5)+
+        geom_line()+
+        geom_errorbar(aes(ymin=asymp.LCL, ymax=asymp.UCL), width=.2, linetype='solid')+
+        geom_text(aes(y=asymp.UCL + 0.02), color='black', size=4)+
+        facet_wrap(~variety)+
+        labs(x = 'Sample Mass (g)',
+             y = 'Mean Split Proportion',
+             color='Threshing Method')+
+        scale_color_viridis_d(option='C', begin=.3, end=.6)
+```
+
+```{r table of means}
+pod_means = cld(emmeans(glm_pod, ~ variety | method, type='response'), Letters = letters, decreasing = TRUE) %>% 
+        rowwise() %>% 
+        mutate(round_mean = sprintf("%.3f", round(prob, 3)),
+               confint = sprintf("%.3f", round(SE*1.96, 3)),
+               mean = paste(round_mean, "+/-", confint, " ", str_trim(.group), sep=''),
+               type = "Intact Pod") %>% 
+        dplyr::select(variety, method, type, mean) %>% 
+        rename_all(str_to_title)
+
+seed_means = cld(emmeans(glm_seed, ~ variety | method, type='response'), Letters = letters, decreasing = TRUE) %>% 
+        rowwise() %>% 
+        mutate(round_mean = sprintf("%.3f", round(prob, 3)),
+               confint = sprintf("%.3f", round(SE*1.96, 3)),
+               mean = paste(round_mean, "+/-", confint, " ", str_trim(.group), sep=''),
+               type = "Whole Seed") %>% 
+        dplyr::select(variety, method, type, mean) %>% 
+        rename_all(str_to_title)
+
+split_means = cld(emmeans(glm_split, ~ variety | method, type='response'), Letters = letters, decreasing = TRUE) %>% 
+        rowwise() %>% 
+        mutate(round_mean = sprintf("%.3f", round(prob, 3)),
+               confint = sprintf("%.3f", round(SE*1.96, 3)),
+               mean = paste(round_mean, "+/-", confint, " ", str_trim(.group), sep=''),
+               type = "Split Seed") %>% 
+        dplyr::select(variety, method, type, mean) %>% 
+        rename_all(str_to_title)
+
+full_table = rbind(pod_means, seed_means, split_means) %>% 
+        spread(key=Type, value=Mean) %>% 
+        arrange(Method, Variety)
+
+bt_table = full_table[1:5,]
+it_table = full_table[6:10,]
+
+bt_table
+it_table
+
+write.csv(bt_table, file="../../manuscript_images/belt_threshing_table.csv")
+write.csv(it_table, file="../../manuscript_images/impact_threshing_table.csv")
+
+```
+
+
 ```{r}
-seed_estimates <- estimates %>% 
-        filter(class=='p_seed')
+#power.prop.test()
 
-pod_estimates <- estimates %>% 
-        filter(class=='p_pod')
+# p_seed_matrix <- matrix(nrow = nrow(combined_data), ncol = nrow(combined_data))
+# es_seed_matrix <- matrix(nrow = nrow(combined_data), ncol = nrow(combined_data))
+# sum_count <- c()
+# factor_g <- c()
+# 
+# for(i in 1:nrow(combined_data)){
+#         for(j in 1:nrow(combined_data)){
+#                 es_prop = ES.h(combined_data[i,]$p_seed, combined_data[j,]$p_seed)
+#                 pair_power = pwr.2p2n.test(h=es_prop,
+#                               n1=combined_data[i,]$total_seeds, 
+#                               n2=combined_data[i,]$total_seeds,
+#                               alternative="two.sided")
+#                 factor_g <- c(factor_g, combined_data[i,]$sample_mass_g)
+#                 sum_count <- c(sum_count, combined_data[i,]$total_seeds*combined_data[j,]$total_seeds)
+#                 es_seed_matrix[i,j] = es_prop
+#                 p_seed_matrix[i,j] = pair_power$power
+#                 
+#         }
+# }
+# 
+# es_vec <- abs(as.vector(es_seed_matrix))
+# pwr_vec <- as.vector(p_seed_matrix)
+# 
+# pes_df <- data.frame("es"=es_vec, "sum_count"=sum_count, "pwr"=pwr_vec, 'g'=factor_g)
+# 
+# ggplot(pes_df, aes(x = es_vec, y=pwr, color=sum_count))+
+#         geom_point(alpha=.5)+
+#         scale_color_viridis_c(option='D', trans="log")
 
-split_estimates <- estimates %>% 
-        filter(class=='p_split')
+```
+
+```{r power_curve g1}
+# Combined power curve for 1g samples
+g1 <- combined_data %>% 
+        filter(sample_mass_g==1)
+g1_p_seed_matrix <- matrix(nrow = nrow(g1), ncol = nrow(g1))
+g1_es_seed_matrix <- matrix(nrow = nrow(g1), ncol = nrow(g1))
+g1_sum_count <- c()
+
+for(i in 1:nrow(g1)){
+        for(j in 1:nrow(g1)){
+                es_prop = ES.h(g1[i,]$p_seed, g1[j,]$p_seed)
+                pair_power = pwr.2p2n.test(h=es_prop,
+                              n1=g1[i,]$total_seeds, 
+                              n2=g1[i,]$total_seeds,
+                              alternative="two.sided")
+                g1_sum_count <- c(g1_sum_count, sum(g1[i,]$total_seeds, g1[j,]$total_seeds))
+                g1_es_seed_matrix[i,j] = es_prop
+                g1_p_seed_matrix[i,j] = pair_power$power
+                
+        }
+}
+
+
+g1_es_vec <- abs(as.vector(g1_es_seed_matrix))
+g1_pwr_vec <- as.vector(g1_p_seed_matrix)
+
+g1_pes_df <- data.frame("es"=g1_es_vec, "sum_count"=g1_sum_count, "pwr"=g1_pwr_vec)
+
+ggplot(g1_pes_df, aes(x = es, y=pwr, color=sum_count))+
+        geom_point()+
+        scale_color_viridis_c(option='D')
+
+```
+
+```{r power_curve g2}
+# Combined power curve for 2g samples
+g2 <- combined_data %>% 
+        filter(sample_mass_g==2)
+g2_p_seed_matrix <- matrix(nrow = nrow(g2), ncol = nrow(g2))
+g2_es_seed_matrix <- matrix(nrow = nrow(g2), ncol = nrow(g2))
+g2_sum_count <- c()
+
+for(i in 1:nrow(g2)){
+        for(j in 1:nrow(g2)){
+                es_prop = ES.h(g2[i,]$p_seed, g2[j,]$p_seed)
+                pair_power = pwr.2p2n.test(h=es_prop,
+                              n1=g2[i,]$total_seeds, 
+                              n2=g2[i,]$total_seeds,
+                              alternative="two.sided")
+                g2_sum_count <- c(g2_sum_count, sum(g2[i,]$total_seeds, g2[j,]$total_seeds))
+                g2_es_seed_matrix[i,j] = es_prop
+                g2_p_seed_matrix[i,j] = pair_power$power
+                
+        }
+}
+
+
+g2_es_vec <- abs(as.vector(g2_es_seed_matrix))
+g2_pwr_vec <- as.vector(g2_p_seed_matrix)
+
+g2_pes_df <- data.frame("es"=g2_es_vec, "sum_count"=g2_sum_count, "pwr"=g2_pwr_vec)
+
+ggplot(g2_pes_df, aes(x = es, y=pwr, color=sum_count))+
+        geom_point()+
+        scale_color_viridis_c(option='D')
+
 ```
 
 
-```{r seed_graphs, echo=FALSE}
-ggplot(seed_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
-        geom_line()+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'CV of Estimates', title='Seed Proportions\nCoefficient of Variation by Variety')
+```{r power_curve g3}
+# Combined power curve for 3g samples
+g3 <- combined_data %>% 
+        filter(sample_mass_g==3)
+g3_p_seed_matrix <- matrix(nrow = nrow(g3), ncol = nrow(g3))
+g3_es_seed_matrix <- matrix(nrow = nrow(g3), ncol = nrow(g3))
+g3_sum_count <- c()
 
-ggplot(seed_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
-        geom_line()+
-        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'Mean Estimates', title='Seed Proportions\nEstimates and SD by Variety')
+for(i in 1:nrow(g3)){
+        for(j in 1:nrow(g3)){
+                es_prop = ES.h(g3[i,]$p_seed, g3[j,]$p_seed)
+                pair_power = pwr.2p2n.test(h=es_prop,
+                              n1=g3[i,]$total_seeds, 
+                              n2=g3[i,]$total_seeds,
+                              alternative="two.sided")
+                g3_sum_count <- c(g3_sum_count, sum(g3[i,]$total_seeds, g3[j,]$total_seeds))
+                g3_es_seed_matrix[i,j] = es_prop
+                g3_p_seed_matrix[i,j] = pair_power$power
+                
+        }
+}
+
+
+g3_es_vec <- abs(as.vector(g3_es_seed_matrix))
+g3_pwr_vec <- as.vector(g3_p_seed_matrix)
+
+g3_pes_df <- data.frame("es"=g3_es_vec, "sum_count"=g3_sum_count, "pwr"=g3_pwr_vec)
+
+ggplot(g3_pes_df, aes(x = es, y=pwr, color=sum_count))+
+        geom_point()+
+        scale_color_viridis_c(option='D')
+
+```
+
+```{r power_curve g4}
+# Combined power curve for 4g samples
+g4 <- combined_data %>% 
+        filter(sample_mass_g==4)
+g4_p_seed_matrix <- matrix(nrow = nrow(g4), ncol = nrow(g4))
+g4_es_seed_matrix <- matrix(nrow = nrow(g4), ncol = nrow(g4))
+g4_sum_count <- c()
+
+for(i in 1:nrow(g4)){
+        for(j in 1:nrow(g4)){
+                es_prop = ES.h(g4[i,]$p_seed, g4[j,]$p_seed)
+                pair_power = pwr.2p2n.test(h=es_prop,
+                              n1=g4[i,]$total_seeds, 
+                              n2=g4[i,]$total_seeds,
+                              alternative="two.sided")
+                g4_sum_count <- c(g4_sum_count, sum(g4[i,]$total_seeds, g4[j,]$total_seeds))
+                g4_es_seed_matrix[i,j] = es_prop
+                g4_p_seed_matrix[i,j] = pair_power$power
+                
+        }
+}
+
+
+g4_es_vec <- abs(as.vector(g4_es_seed_matrix))
+g4_pwr_vec <- as.vector(g4_p_seed_matrix)
+
+g4_pes_df <- data.frame("es"=g4_es_vec, "sum_count"=g4_sum_count, "pwr"=g4_pwr_vec)
+
+ggplot(g4_pes_df, aes(x = es, y=pwr, color=sum_count))+
+        geom_point()+
+        scale_color_viridis_c(option='D')
+
 ```
 
 
-```{r pod_graphs, echo=FALSE}
-ggplot(pod_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
-        geom_line()+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'CV of Estimates', title='Pod Proportions\nCoefficient of Variation by Variety')
+```{r power_curve g5}
+# Combined power curve for 5g samples
+g5 <- combined_data %>% 
+        filter(sample_mass_g==5)
+g5_p_seed_matrix <- matrix(nrow = nrow(g5), ncol = nrow(g5))
+g5_es_seed_matrix <- matrix(nrow = nrow(g5), ncol = nrow(g5))
+g5_sum_count <- c()
 
-ggplot(pod_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
-        geom_line()+
-        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'Mean Estimates', title='Pod Proportions\nEstimates and SD by Variety')
+for(i in 1:nrow(g5)){
+        for(j in 1:nrow(g5)){
+                es_prop = ES.h(g5[i,]$p_seed, g5[j,]$p_seed)
+                pair_power = pwr.2p2n.test(h=es_prop,
+                              n1=g5[i,]$total_seeds, 
+                              n2=g5[i,]$total_seeds,
+                              alternative="two.sided")
+                g5_sum_count <- c(g5_sum_count, sum(g5[i,]$total_seeds, g5[j,]$total_seeds))
+                g5_es_seed_matrix[i,j] = es_prop
+                g5_p_seed_matrix[i,j] = pair_power$power
+                
+        }
+}
+
+
+g5_es_vec <- abs(as.vector(g5_es_seed_matrix))
+g5_pwr_vec <- as.vector(g5_p_seed_matrix)
+
+g5_pes_df <- data.frame("es"=g5_es_vec, "sum_count"=g5_sum_count, "pwr"=g5_pwr_vec)
+
+ggplot(g5_pes_df, aes(x = es, y=pwr, color=sum_count))+
+        geom_point()+
+        scale_color_viridis_c(option='D')
+
 ```
 
-```{r split_graphs, echo=FALSE}
-ggplot(split_estimates, aes(x = sample_mass, y = cv, group=method, linetype = method))+
-        geom_line()+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'CV of Estimates', title='Split Proportions\nCoefficient of Variation by Variety')
+```{r prop_spread by seed count}
+# Instantiate vectors to hold spreads
+max_spread = c()
+min_spread = c()
 
-ggplot(split_estimates, aes(x = sample_mass, y = est, group=method, linetype = method))+
-        geom_line()+
-        geom_errorbar(aes(ymin = est - est_sd, ymax = est + est_sd), width=.2, linetype='solid')+
-        facet_wrap(~variety)+
-        labs(x='Sample Mass', y = 'Mean Estimates', title='Split Proportions\nEstimates and SD by Variety')
+# Model worst case scenario centered on 0.5
+n_size = 1:300
+for(n in n_size){
+        spread=0.01
+        p_stat = 0
+        while(p_stat < .8 & spread <= 1.0){
+                p_test = power.prop.test(n=n, p1=.5+(spread/2), p2=.5-(spread/2), alternative = 'two.sided')
+                p_stat = p_test$power
+                spread = spread + 0.001
+        }
+        max_spread <- c(max_spread, spread)
+}
+
+# Model best case scenario centered on 0.85
+for(n in n_size){
+        spread=0.01
+        actual_spread=0.01
+        p_stat = 0
+        while(p_stat < .8 & actual_spread < .99){
+                p2 = 0.85-(spread/2)
+                p1 = 0.85+(spread/2)
+                if(p1>1.0){
+                        p1 = 1
+                }
+                if(p2<0){
+                        p2 = 0
+                }
+                p_test = power.prop.test(n=n, p1=p1, p2=p2)
+                p_stat = p_test$power
+                spread = spread + 0.001
+                actual_spread = p1-p2
+        }
+        min_spread <- c(min_spread, actual_spread)
+}
+
+# Create a dataframe of the results
+p_sizes <- data.frame('n'=n_size, 'worst'= max_spread, 'best'=min_spread) %>% 
+        gather(key = 'scenario', value = 'prop_spread', worst:best)
+
+vline_df = data.frame(
+        mass=c('1g', '2g', '3g', '4g', '5g'),
+        x = c(46, 92, 138, 183, 230)
+        )
+
+power_curve_p <- ggplot(p_sizes, aes(x = n, y = prop_spread, color=scenario))+
+        geom_line(alpha=0.8, size=2)+
+        geom_vline(xintercept = c(46, 92, 138, 183, 230), linetype='dotted')+
+        geom_hline(yintercept = .25)+
+        geom_label(vline_df, mapping=aes(x=x, y=.95,label=mass), inherit.aes = FALSE)+
+        labs(x="Num Seeds",
+             y="Difference in Sample Proportions",
+             color="Scenario"
+             )+
+        scale_color_viridis_d(option='D', begin = 0.4, end =0.8)
+
+power_curve_p
+
 ```
 
-```{r}
-VAR = "Rocky Mountain Remont"
-METHOD = "BT3X"
+```{r deprecated?}
+variety = rep(c("AAC Mountainview", "Delaney", "Eski", "Rocky Mountain Remont", "Shoshone"), each = 2000)
+method = rep(c("HLDP7x35s", "BTX3"), times=10000)
+sample_mass = rep(seq(from=0.01, to = 5.0, length=1000), each=2, times = 5)
+X_mat <- data.frame(variety=variety, method=method, legume_fruit_mass_g=sample_mass)
 
-data_sub <- filter(comb_sum, variety==VAR, method==METHOD)
-lm_seed <- lmer(p_seed ~ sample_mass + (1|rep), data = data_sub)
-lm_pod <- lmer(p_pod ~ sample_mass + (1|rep), data = data_sub)
-lm_split <- lmer(p_split ~ sample_mass + (1|rep), data = data_sub)
-glm_seed <- glm(p_seed ~ sample_mass, data = data_sub, family='binomial')
-print("SEED CLD")
-cld(emmeans(glm_seed, ~ sample_mass), Letters = letters, reversed = TRUE)
-print("POD CLD")
-cld(emmeans(lm_pod, ~ sample_mass), Letters = letters, reversed = TRUE)
-print("SPLIT CLD")
-cld(emmeans(lm_split, ~ sample_mass), Letters = letters, reversed = TRUE)
+X_mat$pred_count <- as.integer(predict(seed_model, X_mat))
+X_mat$pred_count <- factor(X_mat$pred_count, ordered = TRUE)
+X_mat <- X_mat %>% 
+        group_by(variety, pred_count, method) %>% 
+        summarize(legume_fruit_mass_g = mean(legume_fruit_mass_g)) %>% 
+        filter(pred_count > 0) %>% 
+        mutate(n_char = as.character(pred_count))
 
+final_df <- X_mat %>% 
+        left_join(p_sizes, by = 'n_char') %>% 
+        mutate(spread_char = as.character(prop_spread)) %>% 
+        group_by(variety, spread_char, method) %>% 
+        summarize(legume_fruit_mass_g = mean(legume_fruit_mass_g),
+                  prop_spread = mean(prop_spread),
+                  pred_count = mean(as.numeric(pred_count)))
+```
+
+
+```{r broken plot}
+ggplot(final_df, aes(x = legume_fruit_mass_g, y = prop_spread, color = variety))+
+        geom_line()+
+        scale_color_viridis_d(option='D')+
+        geom_hline(yintercept = 0.25)
 ```
 
