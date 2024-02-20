@@ -1,17 +1,15 @@
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
-
 def train_transforms():
     """
-    Returns an Albumentations compose function for training imageset
+    Parameters:
+        None
+    Returns:
+        An Albumentations compose function for training imageset
     """
-
     return A.Compose([
         A.RandomBrightnessContrast(p=0.4),
-        # A.augmentations.geometric.transforms.GridDistortion(p=0.5),
-        # A.CenterCrop(width=1000, height=1000, min_visibility=.8, p = .5),
-        # A.RandomSizedBBoxSafeCrop(height=3000, width=3000, erosion_rate=0, interpolation=1, p=.5),
         A.Flip(p=0.5),
         A.RandomRotate90(p=0.5),
         A.MotionBlur(p=0.2),
@@ -25,9 +23,11 @@ def train_transforms():
 
 def val_transforms():
     """
-    Returns an Albumentations compose function for the validation imageset
+    Parameters:
+        None
+    Returns:
+        An Albumentations compose function for the validation imageset
     """
-
     return A.Compose([
         ToTensorV2(p=1.0)
     ], bbox_params={
@@ -38,10 +38,10 @@ def val_transforms():
 
 def collate_fn(batch):
     """
-    To handle the data loading as different images may have a different number of objects
-    and to handle varying size tensors as well
-    :param batch:
-    :return:
+    Handles batches of varying sizes for the Dataloader
+    Parameters:
+        The batch of images passed from a Dataset in a Dataloader
+    Returns:
+        A zipped tuple of a given batch
     """
-
     return tuple(zip(*batch))

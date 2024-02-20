@@ -21,6 +21,7 @@ if ! [[ -d ./images ]]; then
 	echo "Extracting image directories"
 	unzip train_val_images.zip
 	cd ../
+	
 elif ! [[ -d ./images/train ]] | [[ -d ./images/val ]]; then
     cd ./images
 	echo "Extracting image directories"
@@ -28,9 +29,14 @@ elif ! [[ -d ./images/train ]] | [[ -d ./images/val ]]; then
 	cd ../
 else
     cd ./images
-    unzip -U ./train_val_images.zip
+    unzip -u ./train_val_images.zip
 	echo "Training and validation images found and extracted."
 	cd ../
+fi
+
+if [[ -f ./data/images/coco_annotations.json ]]; then
+    mkdir -p ./data/annotations
+    mv ./coco_annotations.json ../annotations/coco_annotations.json
 fi
 
 # Get model checkpoints from Zenodo
@@ -49,4 +55,3 @@ elif ! [[ -f ./model_chkpt/frcnn_sainfoin_1.0_100.pth ]]; then
 else
 	echo "Model weights found."
 fi
-

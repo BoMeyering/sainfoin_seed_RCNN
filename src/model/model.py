@@ -4,9 +4,14 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 def create_model(n_classes: int, n_obj_det: int):
     """
-    Returns a pretrained Faster RCNN with anchor sizes set up
-    to detect smaller objects in the image, a new model head to detect our classes,
-    and change the model head to be able to detect up to 500 objects in each image.
+    Parameters:
+        n_classes (int): The number of classes to detect.
+        n_obj_det (int): The maximum number of objects the model will detect in one image.
+
+    Returns:
+        A pretrained Faster RCNN with anchor sizes set up
+        to detect smaller objects in the image, a new model head to detect our classes,
+        and change the model head to be able to detect up to 500 objects in each image.
     """
 
     # Set new anchor sizes
