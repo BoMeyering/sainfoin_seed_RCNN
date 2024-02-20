@@ -38,4 +38,34 @@ This directory is now set up to run all python scripts within the directory in t
 
 # Image Inference
 
-# 
+# Environment Setup
+Clone this repo to your local environment
+```
+~/$ git clone https://github.com/TLILegume/sainfoin_seed_RCNN.git
+~/$ cd sainfoin_seed_RCNN
+```
+
+I would suggest setting up a virtualenv on your machine using pyenv, venv, or virtualenv, whatever you prefer. 
+Using pyenv with a Python 3.11.6 installation, you can set up a virtualenv named 'sainfoin_RCNN' shown below
+```
+~/sainfoin_seed_RCNN$ pyenv virtualenv 3.11.6 sainfoin_RCNN
+~/sainfoin_seed_RCNN$ pyenv local sainfoin_RCNN
+(sainfoin_RCNN) ~/sainfoin_seed_RCNN$
+```
+Then pip install all the requirements for the project
+
+
+# Get Data and Model Weights
+## On UNIX systems
+Run the bash script at ```./download_data_weights.sh```
+This script checks and downloads all of the appropriate files, images, and model weights into the main folder of the repo.
+
+## On Windows
+You can either run the Bash script in WSL if you have it installed, or you can download the files directly and extract them in the appropriate directories.
+You can download all the images from [Zenodo][def]. Create a folder ```./sainfoin_seed_RCNN/data/images``` and extract them there.
+The model checkpoint can be downloaded [here][def2]. You can choose to download one or several of the checkpoints. Create the directory ```./sainfoin_seed_RCNN/model_chkpt``` and extract the .pth files directly in the folder like this ```./model_chkpt/frcnn_sainfoin_1.0_100.pth```.
+
+# Set
+
+[def]: https://zenodo.org/doi/10.5281/zenodo.8346923
+[def2]: https://zenodo.org/doi/10.5281/zenodo.8387982
