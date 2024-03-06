@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 
-if ! [[ -d ./data ]]; then
-	mkdir ./data
-fi
 cd ./data
-
-if ! [[ -f ./seed_weights.csv ]]; then
-	echo "Downloading 'seed_weights.csv'"
-	curl https://zenodo.org/records/10009966/files/seed_weights.csv?download=1 --output seed_weights.csv
-else
-	echo "Seed weights file found."
-fi
 
 # Get image data
 if ! [[ -d ./images ]]; then
@@ -55,3 +45,5 @@ elif ! [[ -f ./model_chkpt/frcnn_sainfoin_1.0_100.pth ]]; then
 else
 	echo "Model weights found."
 fi
+
+exit 0

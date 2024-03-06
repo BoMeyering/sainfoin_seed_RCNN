@@ -1,3 +1,6 @@
+# model.py
+# Holds definition of FRCNN_50 model
+
 import torchvision
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor

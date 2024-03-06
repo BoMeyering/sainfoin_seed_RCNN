@@ -1,8 +1,7 @@
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from pycocotools.coco import COCO
 import albumentations as A
 from glob import glob
-from pathlib import Path
 from sklearn.utils.random import sample_without_replacement
 import numpy as np
 import os
@@ -22,17 +21,20 @@ def dir_sampler(dir: str, k: int) -> list:
 
 class SeedDataset(Dataset):
   """
-  Subclass for the 
+  Subclass of Dataset for sainfoin seed images and annotations
   """
 
-  def __init__(self, image_dir: str, annotation_path: str, resize_dims: tuple=None, transforms: A.Compose=None, subset: list=None):
+  def __init__(self, image_dir: str, annotation_path: str, resize_dims: tuple[int, int]=None, transforms: A.Compose=None, subset: list=None):
     """
     Initiate the SeedDataset class
-    image_dir: pathlib.Path to image directory
-    annotation_path: pathlib.Path to coco annotation file
-    resize_dims: a tuple of the resize dimensions
-    transforms: Albumentations transform function
-    subset: a list of img_ids to restrcit the dataset to within the given image_dir
+    Parameters:
+      image_dir (str): Path to image directory
+      annotation_path (str): Path to coco annotation file
+      resize_dims (tuple[int, int]): A tuple of two integers representing the image resize dimensions
+      transforms (A.Compose): Albumentations transform function
+      subset: a list of img_ids to restrcit the dataset to within the given image_dir
+    Returns:
+      An instantiated SeedDataset object
     """
 
     self.image_paths = glob(image_dir+"/*")

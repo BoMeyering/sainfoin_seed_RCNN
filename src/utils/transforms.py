@@ -1,3 +1,6 @@
+# transforms.py
+# Defines all image augmentations for training and validation loops
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 

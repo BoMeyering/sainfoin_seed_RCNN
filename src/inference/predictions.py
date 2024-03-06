@@ -7,6 +7,7 @@ from typing import Optional
 
 def tensor_img(img_path: str) -> tuple[torch.Tensor, np.array]:
     """
+    Loads an image path and returns a scaled tensor
     """
     orig = cv2.imread(img_path)
     if type(orig) == None:
@@ -23,7 +24,16 @@ def tensor_img(img_path: str) -> tuple[torch.Tensor, np.array]:
 @torch.no_grad()
 def predict(img: torch.Tensor, model: torchvision.models.detection.faster_rcnn.FasterRCNN, device: str='cpu', nms_threshold: Optional[float]=None, conf_threshold: Optional[float]=None):
     """
+    Predicts the bounding boxes for an image and applies non-maximum supression
+    Parameters:
+        img:
+        model:
+        device:
+        nms_threshold:
+        conf_threshold:
     
+    Returns:
+        
     """
 
     img_device = img.get_device()

@@ -1,9 +1,6 @@
 # Python module imports
-import sys
 import os
 import torch
-import torchvision
-import scipy
 import datetime
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -13,13 +10,14 @@ from torchmetrics.detection import IntersectionOverUnion, MeanAveragePrecision
 
 
 # local script imports
-from config import train_dir, val_dir, test_dir, annotation_path
-from config import chkpt_dir, tensorboard_dir, log_dir, inference_dir
-from config import device, cores, classes, n_classes, resize_to
+from config import train_dir, val_dir, annotation_path
+from config import tensorboard_dir
+from config import device, cores, classes, n_classes
 from config import n_epochs, batch_size, lr, momentum, gamma, base_name
 from model.model import create_model
-from model.train_val import train_model, _iou_metrics, _map_metrics
-from utils.dataset import SeedDataset, dir_sampler
+from model.train_val import train_model
+from model.metrics import _iou_metrics, _map_metrics
+from utils.dataset import SeedDataset
 from utils.loggers import create_logger
 from utils.transforms import train_transforms, val_transforms, collate_fn
 
@@ -54,9 +52,8 @@ logger.info("MODEL_CONFIG\n"+"\n".join(model_config))
 
 # Set proportion sizes for subsampling the data
 sizes = [0.05, 0.1, 0.2, 0.5, 1.0]
-# sizes = [0.05]
 
-img_data = pd.read_csv('./data/seed_weights.csv')
+img_data = pd.read_csv('./data/power_analysis/seed_weights.csv')
 train_imgs = img_data.loc[img_data['class']=='train']
 val_imgs = img_data.loc[img_data['class']=='val']
 

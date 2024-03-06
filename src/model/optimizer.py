@@ -1,3 +1,6 @@
+# optimizer.py
+# Defines the optimizer modules and learning rate scheduler
+
 import torch
 
 def create_optim(model=None, lr=0.1, momentum=0.8):

@@ -1,9 +1,16 @@
+# loggers.py
+# Functions to create a standard Python logger using `logging`
 import logging
 import datetime
 
 def create_logger(output_file: str=None):
     """
+    Creates a standard logger to use during training
+    Parameters:
+        output_file: A string representing the output file to write to
     
+    Returns:
+        An instantiated logger object
     """
     today = datetime.date.today()
 

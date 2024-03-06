@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ### Analysis
+
 ```{r library import, message=FALSE}
 library(tidyverse)
 library(data.table)
@@ -21,6 +22,7 @@ library(lme4)
 library(multcomp)
 library(lmerTest)
 library(multcompView)
+library(factoextra)
 library(aTSA)
 library(caret)
 library(emmeans)
@@ -103,7 +105,6 @@ ggplot(filter(dl_metrics, str_detect(metric, 'map')), aes(x=size, y=value, color
              y="Metric Value")
 ```
 
-
 ```{r data cleaning}
 combined_data <- img_data %>% 
         full_join(objects, by = "img_name") %>% 
@@ -185,6 +186,22 @@ MAE(glm_count_2_pred, val$total_seeds)
 
 # Refit the best model on all the data
 seed_model <- glm(total_seeds ~ variety * legume_fruit_mass_g, data=combined_data)
+```
+
+```{r PCA}
+
+pca_data <- combined_data %>% 
+        dplyr::select(variety:legume_seed_mass_g, 16:18)
+
+scaled <- pca_data %>% 
+        dplyr::select(7:9) %>% 
+        filter(complete.cases(.)) %>% 
+        scale()
+
+pca1 <- prcomp(scaled)
+
+fviz_pca_biplot(pca1)
+
 ```
 
 ```{r glm modeling}
@@ -277,6 +294,11 @@ split_means_p <- ggplot(split_cld, aes(x = sample_mass_g, y = prob, group=method
              y = 'Mean Split Proportion',
              color='Threshing Method')+
         scale_color_viridis_d(option='C', begin=.3, end=.6)
+
+
+pod_means_p
+seed_means_p
+split_means_p
 ```
 
 ```{r table of means}
@@ -322,40 +344,6 @@ write.csv(it_table, file="../../manuscript_images/impact_threshing_table.csv")
 
 ```
 
-
-```{r}
-#power.prop.test()
-
-# p_seed_matrix <- matrix(nrow = nrow(combined_data), ncol = nrow(combined_data))
-# es_seed_matrix <- matrix(nrow = nrow(combined_data), ncol = nrow(combined_data))
-# sum_count <- c()
-# factor_g <- c()
-# 
-# for(i in 1:nrow(combined_data)){
-#         for(j in 1:nrow(combined_data)){
-#                 es_prop = ES.h(combined_data[i,]$p_seed, combined_data[j,]$p_seed)
-#                 pair_power = pwr.2p2n.test(h=es_prop,
-#                               n1=combined_data[i,]$total_seeds, 
-#                               n2=combined_data[i,]$total_seeds,
-#                               alternative="two.sided")
-#                 factor_g <- c(factor_g, combined_data[i,]$sample_mass_g)
-#                 sum_count <- c(sum_count, combined_data[i,]$total_seeds*combined_data[j,]$total_seeds)
-#                 es_seed_matrix[i,j] = es_prop
-#                 p_seed_matrix[i,j] = pair_power$power
-#                 
-#         }
-# }
-# 
-# es_vec <- abs(as.vector(es_seed_matrix))
-# pwr_vec <- as.vector(p_seed_matrix)
-# 
-# pes_df <- data.frame("es"=es_vec, "sum_count"=sum_count, "pwr"=pwr_vec, 'g'=factor_g)
-# 
-# ggplot(pes_df, aes(x = es_vec, y=pwr, color=sum_count))+
-#         geom_point(alpha=.5)+
-#         scale_color_viridis_c(option='D', trans="log")
-
-```
 
 ```{r power_curve g1}
 # Combined power curve for 1g samples
@@ -425,7 +413,6 @@ ggplot(g2_pes_df, aes(x = es, y=pwr, color=sum_count))+
 
 ```
 
-
 ```{r power_curve g3}
 # Combined power curve for 3g samples
 g3 <- combined_data %>% 
@@ -493,7 +480,6 @@ ggplot(g4_pes_df, aes(x = es, y=pwr, color=sum_count))+
         scale_color_viridis_c(option='D')
 
 ```
-
 
 ```{r power_curve g5}
 # Combined power curve for 5g samples
@@ -593,34 +579,58 @@ power_curve_p
 
 ```
 
-```{r deprecated?}
-variety = rep(c("AAC Mountainview", "Delaney", "Eski", "Rocky Mountain Remont", "Shoshone"), each = 2000)
-method = rep(c("HLDP7x35s", "BTX3"), times=10000)
-sample_mass = rep(seq(from=0.01, to = 5.0, length=1000), each=2, times = 5)
-X_mat <- data.frame(variety=variety, method=method, legume_fruit_mass_g=sample_mass)
+```{r}
 
-X_mat$pred_count <- as.integer(predict(seed_model, X_mat))
-X_mat$pred_count <- factor(X_mat$pred_count, ordered = TRUE)
-X_mat <- X_mat %>% 
-        group_by(variety, pred_count, method) %>% 
-        summarize(legume_fruit_mass_g = mean(legume_fruit_mass_g)) %>% 
-        filter(pred_count > 0) %>% 
-        mutate(n_char = as.character(pred_count))
+x2g <-  combined_data %>% 
+        filter(sample_mass_g==2)
 
-final_df <- X_mat %>% 
-        left_join(p_sizes, by = 'n_char') %>% 
-        mutate(spread_char = as.character(prop_spread)) %>% 
-        group_by(variety, spread_char, method) %>% 
-        summarize(legume_fruit_mass_g = mean(legume_fruit_mass_g),
-                  prop_spread = mean(prop_spread),
-                  pred_count = mean(as.numeric(pred_count)))
+subset <- filter(x2g, method=='belt_thresher') %>%
+        mutate(variety=paste(variety, rep, sep='.'))
+
+power_table = expand_grid(subset$variety, subset$variety)
+colnames(power_table) <- c('variety1', 'variety2')
+power_table <- power_table %>% 
+        rowwise() %>% 
+        mutate(variety1 = variety1[1])
+power_table$power = NA
+power_table$es = NA
+power_table$p1 = NA
+power_table$p2 = NA
+power_table$z = NA
+k=1
+for(i in 1:nrow(subset)){
+        for(j in 1:nrow(subset)){
+                n1 = subset$total_seeds[i]
+                n2 = subset$total_seeds[j]
+                p1 = subset$p_seed[i]
+                p2 = subset$p_seed[j]
+                x1 = subset$seed[i]
+                x2 = subset$seed[j]
+                z = prop.test(x = c(x1, x2), n = c(n1, n2))$p.value
+                h = ES.h(p1, p2)
+                power = pwr.2p2n.test(h=h, n1=n1, n2=n2)$power
+                power_table[k,3] = power
+                power_table[k,4] = h
+                power_table[k,5] = p1
+                power_table[k,6] = p2
+                power_table[k,7] = z
+                k= k + 1
+        }
+}
+
+power_table <- power_table %>%
+        filter(es >= 0,
+               variety1 != variety2) %>%
+        arrange(power)
+        # mutate(index = es*power) %>%
+        # group_by(variety1) %>%
+        # summarize(count = n(),
+        #           mean = mean(index),
+        #           sd = sd(index))
+
+
+ggplot(power_table, aes(x=variety1, y=variety2, fill=power))+
+        geom_tile()+
+        theme(axis.text.x = element_text(angle = 90))
+
 ```
-
-
-```{r broken plot}
-ggplot(final_df, aes(x = legume_fruit_mass_g, y = prop_spread, color = variety))+
-        geom_line()+
-        scale_color_viridis_d(option='D')+
-        geom_hline(yintercept = 0.25)
-```
-
