@@ -38,6 +38,11 @@ def val_transforms():
         'label_fields': ['labels']
     })
 
+def inf_transforms():
+    return A.Compose([
+        ToTensorV2(p=1.0)
+    ])
+
 
 def collate_fn(batch):
     """

@@ -173,6 +173,13 @@ val <- combined_data %>%
 glm_count_1 <- glm(total_seeds ~ variety * legume_fruit_mass_g, data=train)
 glm_count_2<- glm(total_seeds ~ variety * legume_fruit_mass_g, data=train, family=poisson(link = 'log'))
 
+# Linear 
+
+
+
+
+
+
 # Predict on the validation set
 glm_count_1_pred <- predict(glm_count_1, val)
 glm_count_2_pred <- predict(glm_count_2, val, type='response')
@@ -190,17 +197,17 @@ seed_model <- glm(total_seeds ~ variety * legume_fruit_mass_g, data=combined_dat
 
 ```{r PCA}
 
-pca_data <- combined_data %>% 
-        dplyr::select(variety:legume_seed_mass_g, 16:18)
-
-scaled <- pca_data %>% 
-        dplyr::select(7:9) %>% 
-        filter(complete.cases(.)) %>% 
-        scale()
-
-pca1 <- prcomp(scaled)
-
-fviz_pca_biplot(pca1)
+# pca_data <- combined_data %>% 
+#         dplyr::select(variety:legume_seed_mass_g, 16:18)
+# 
+# scaled <- pca_data %>% 
+#         dplyr::select(7:9) %>% 
+#         filter(complete.cases(.)) %>% 
+#         scale()
+# 
+# pca1 <- prcomp(scaled)
+# 
+# fviz_pca_biplot(pca1)
 
 ```
 
@@ -260,6 +267,11 @@ split_emm <- emmeans(glm_split, ~ method:sample_mass_g | variety, type='response
 pod_cld <- cld(pod_emm, Letters = letters, decreasing = T)
 seed_cld <- cld(seed_emm, Letters = letters, decreasing = T)
 split_cld <- cld(split_emm, Letters = letters, decreasing = T)
+
+
+
+
+
 
 # Draw graphs for proportional changes
 pod_means_p <- ggplot(pod_cld, aes(x = sample_mass_g, y = prob, group=method, color=method, label=str_trim(.group)))+
