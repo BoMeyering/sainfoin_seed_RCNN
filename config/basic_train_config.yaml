@@ -1,0 +1,28 @@
+# Basic train config
+run_name: basic_fasterrcnn
+device: cuda
+directories:
+  train_dir: data/images/train
+  val_dir: data/images/val
+  test_dir: data/images/test
+  output_dir: outputs
+  label_dir: data/annotations/coco_annotations.json
+  log_dir: logs
+  checkpoint_dir: model_checkpoints
+  tensorboard_dir: runs
+model:
+  num_classes: 3
+  max_det: 500
+optimizer:
+  weight_decay: 0.00001
+  lr: 0.01
+  momentum: 0.99
+scheduler:
+  gamma: 0.9
+dataloader:
+  batch_size: 2
+  shuffle: true
+  drop_last: true
+  pin_memory: true
+general:
+  epochs: 10

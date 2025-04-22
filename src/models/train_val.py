@@ -7,7 +7,7 @@ import time
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
-from config import device, n_epochs
+from config.orig_config import device, n_epochs
 
 sys.path.append('./src')
 
@@ -23,7 +23,6 @@ def _train(model, optimizer, device, data_loader):
     images, targets = data
 
     images = [image.to(device) for image in images]
-    targets = [{k: v.to(device) for k, v in t.items() if k in ['boxes', 'labels']} for t in targets]
 
     loss_dict = model(images, targets)
     losses = torch.zeros(1, device=device)

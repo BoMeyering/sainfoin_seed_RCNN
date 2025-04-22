@@ -14,8 +14,8 @@ from torchvision.ops import nms
 sys.path.append('./src')
 
 # local script imports
-from config import inference_dir
-from config import device, classes
+from config.orig_config import inference_dir
+from config.orig_config import device, classes
 from model.model import create_model
 from model.train_val import train_model
 from model.metrics import _iou_metrics, _map_metrics

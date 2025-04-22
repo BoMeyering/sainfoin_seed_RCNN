@@ -18,8 +18,8 @@ from tqdm import tqdm
 # from torchvision.ops import nms
 
 # local script imports
-from config import inference_dir
-from config import device, classes
+from src.loggers import inference_dir
+from src.loggers import device, classes
 # from model.model import create_model
 # from model.train_val import train_model
 # from model.metrics import _iou_metrics, _map_metrics

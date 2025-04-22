@@ -1,8 +1,15 @@
-# Python module imports
+"""
+train.py
+Main training script
+BoMeyering 2025
+"""
+
 import os
 import torch
 import datetime
 import pandas as pd
+import polars as pl
+from omegaconf import OmegaConf
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -10,10 +17,10 @@ from torchmetrics.detection import IntersectionOverUnion, MeanAveragePrecision
 
 
 # local script imports
-from config.orig_config import train_dir, val_dir, annotation_path
-from config.orig_config import tensorboard_dir
-from config.orig_config import device, cores, classes, n_classes
-from config.orig_config import n_epochs, batch_size, lr, momentum, gamma, base_name
+from src.loggers import train_dir, val_dir, annotation_path
+from src.loggers import tensorboard_dir
+from src.loggers import device, cores, classes, n_classes
+from src.loggers import n_epochs, batch_size, lr, momentum, gamma, base_name
 from model.model import create_model
 from model.train_val import train_model
 from model.metrics import _iou_metrics, _map_metrics

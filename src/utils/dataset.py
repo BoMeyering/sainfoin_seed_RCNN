@@ -36,7 +36,7 @@ class SeedDataset(Dataset):
     Returns:
       An instantiated SeedDataset object
     """
-
+    
     self.image_paths = glob(image_dir+"/*")
     self.image_names = [i.split('/')[-1] for i in self.image_paths]
     self.resize_dims = resize_dims
