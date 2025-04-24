@@ -94,7 +94,7 @@ class SupervisedTrainer(Trainer):
 		""" Train one batch in the epoch """
 
 		images, targets = batch
-		images.to(self.device)
+		images = [image.to(device) for image in images] # Faster RCNN expects a list of tensors like [N[C, H, W]]
 		targets = [
 			{k: v.to(device) for k, v in t.items() if k in ['boxes', 'labels']} for t in targets
 		]
@@ -106,7 +106,7 @@ class SupervisedTrainer(Trainer):
 		
 		self.meters.update("train_loss", loss.item())
 	
-		return loss
+		return loss, loss_dict
 
 	def _train_epoch(self, epoch: int):
 
@@ -118,18 +118,22 @@ class SupervisedTrainer(Trainer):
 
 		for batch_idx, batch in enumerate(self.train_loader):
 			self.optimizer.zero_grad()
-			loss = self._train_step(batch)
+			loss, loss_dict = self._train_step(batch)
 			loss.backward()
 			self.optimizer.step()
 
 			p_bar.set_description(
-				"Train Epoch: {epoch}/{epochs:3}. Iter: {batch:4}/{iterations:4}. LR: {lr:.6f}. Loss: {loss:.6f}".format(
+				"Epoch: {epoch}/{epochs:3}. LR: {lr:.4f}. Total Loss: {loss:.4f}. ClsLoss: {cls_loss:.4f}. BoxLoss: {box_loss:.4f}. ObjLoss: {obj_loss:.4f}. RpnLoss: {rpn_loss:.4f}.".format(
 					epoch=epoch,
 					epochs=self.epochs,	
 					batch=batch_idx + 1,
-					iterations=len(self.train_loader),
 					lr=self.scheduler.get_last_lr()[0],
-					loss=loss.item()
+					loss=loss.item(),
+					cls_loss=loss_dict['loss_classifier'].item(),
+			# epoch_train_loss = self._train_epoch(epoch)
+					box_loss=loss_dict['loss_box_reg'].item(),
+					obj_loss=loss_dict['loss_objectness'].item(),
+					rpn_loss=loss_dict['loss_rpn_box_reg'].item()
 				)
 			)
 			p_bar.update()
@@ -139,61 +143,75 @@ class SupervisedTrainer(Trainer):
 		
 		avg_loss = self.meters['train_loss'].avg
 
+		# Epoch Loss Logging if not in distributed training
+		loss_dict = {"train_loss": avg_loss}
+		self.tb_logger.log_scalar_dict(
+            main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch
+        )
+
 		return avg_loss
 			
 	@torch.no_grad()
 	def _val_step(self, batch: Tuple):
 		""" Validate one batch in the epoch """
-		images, target = batch
-		images.to(self.device)
+		images, targets = batch
+		images = [image.to(device) for image in images]
 		targets = [
 			{k: v.to(device) for k, v in t.items() if k in ['boxes', 'labels']} for t in targets
 		]
 
-		loss_dict = self.model(images)
+		loss_dict = self.model(images, targets)
 		loss = torch.zeros(1, device=self.device)
 		for loss_v in loss_dict.values():
 			loss += loss_v
-		
 		self.meters.update("val_loss", loss.item())
 		# self.metrics.update(preds, targets)
 
-		return loss
+		return loss, loss_dict
 	
 	@torch.no_grad()
 	def _val_epoch(self, epoch: int):
 
 		# Reset meters and model
 		self.meters.reset()
-		self.val_metrics.reset()
-		self.model.eval()
+		# self.val_metrics.reset()
+		# self.model.eval()
 
 		p_bar = tqdm(range(len(self.val_loader)))
 
 		for batch_idx, batch in enumerate(self.val_loader):
-			loss = self._val_step(batch)
+			loss, loss_dict = self._val_step(batch)
 
 			p_bar.set_description(
-				"Train Epoch: {epoch}/{epochs:3}. Iter: {batch:4}/{iterations:4}. LR: {lr:.6f}. Loss: {loss:.6f}".format(
+				"Epoch: {epoch}/{epochs:3}. LR: {lr:.4f}. Total Loss: {loss:.4f}. ClsLoss: {cls_loss:.4f}. BoxLoss: {box_loss:.4f}. ObjLoss: {obj_loss:.4f}. RpnLoss: {rpn_loss:.4f}.".format(
 					epoch=epoch,
-					epochs=self.epochs,
+					epochs=self.epochs,	
 					batch=batch_idx + 1,
-					iterations=len(self.train_loader),
 					lr=self.scheduler.get_last_lr()[0],
-					loss=loss.item()
+					loss=loss.item(),
+					cls_loss=loss_dict['loss_classifier'].item(),
+					box_loss=loss_dict['loss_box_reg'].item(),
+					obj_loss=loss_dict['loss_objectness'].item(),
+					rpn_loss=loss_dict['loss_rpn_box_reg'].item()
 				)
 			)
 			p_bar.update()
 		
 		avg_loss = self.meters['val_loss'].avg
-		metrics = self.metrics.compute()
+		# metrics = self.metrics.compute()
 
+		# Epoch Loss Logging if not in distributed training
+		loss_dict = {"train_loss": avg_loss}
+		self.tb_logger.log_scalar_dict(
+            main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch
+        )
+		
 		return avg_loss
 	
 	def train(self):
 		# Main training loop
 		for epoch in range(1, self.epochs+1):
-			self.logger.info("TRAINING EPOCH {epoch}")
+			# self.logger.info("TRAINING EPOCH {epoch}")
 			epoch_train_loss = self._train_epoch(epoch)
 
 			self.logger.info("VALIDATING EPOCH {epoch}")

@@ -84,3 +84,9 @@ def draw_boxes(src: np.ndarray, outputs: list, classes: dict) -> np.ndarray:
                     lineType=cv2.LINE_AA)
 
     return src
+
+def show_img(img):
+    cv2.namedWindow('test', cv2.WINDOW_NORMAL)
+    cv2.imshow('test', img)
+    cv2.waitKey()
+    cv2.destroyAllWindows()

@@ -4,6 +4,8 @@ Model Evaluation and Metrics
 BoMeyering 2025
 """
 
+import torch
+
 class AverageMeter:
     """
     AverageMeter implements a class which can be used to track a metric over the entire training process.
@@ -30,7 +32,7 @@ class AverageMeter:
         self.vals.append(val)
         self.sum += val * n
         self.count += n
-        self.avg = self.sum / self.count
+        self.avg = torch.tensor(self.sum / self.count)
 
     def __format__(self, format):
         """
