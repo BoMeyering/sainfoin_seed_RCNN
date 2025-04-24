@@ -21,7 +21,7 @@ from model.train_val import train_model
 from model.metrics import _iou_metrics, _map_metrics
 from utils.dataset import SeedDataset, dir_sampler
 from utils.loggers import create_logger
-from utils.transforms import train_transforms, val_transforms, collate_fn
+from src.transforms import train_transforms, val_transforms, collate_fn
 from inference.predictions import tensor_img, predict, draw_boxes
 
 state_paths = glob('./model_chkpt/frcnn_sainfoin_1.0/*_100.pth')

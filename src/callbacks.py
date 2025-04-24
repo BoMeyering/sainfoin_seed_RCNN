@@ -29,7 +29,7 @@ class ModelCheckpoint:
         should_save = len(self.top_checkpoints) < self.top_k or self.monitor_op(current, self.top_checkpoints[-1][0])
         if should_save:
             now = datetime.now().isoformat(timespec='seconds', sep='_').replace(":", ".")
-            chkpt_filename = f"{self.filepath}_epoch_{epoch + 1}_vloss-{current:.6f}.pth"
+            chkpt_filename = f"{self.filepath}_epoch_{epoch}_vloss-{current:.6f}.pth"
             chkpt = {
                 'model_state_dict': logs['model_state_dict'],
                 'epoch': epoch,
@@ -38,7 +38,7 @@ class ModelCheckpoint:
                 **self.metadata
             }
             torch.save(chkpt, chkpt_filename)
-            self.logger.info(f"Epoch {epoch + 1} - '{self.monitor}' improved or is in top-{self.top_k}. Saved to {chkpt_filename}")
+            self.logger.info(f"Epoch {epoch} - '{self.monitor}' improved or is in top-{self.top_k}. Saved to {chkpt_filename}")
 
             self.top_checkpoints.append((current, chkpt_filename))
             self.top_checkpoints.sort(key=lambda x: x[0])  # sort by val_loss (ascending)
@@ -50,4 +50,4 @@ class ModelCheckpoint:
                     os.remove(worst_path)
                     self.logger.info(f"Removed checkpoint: {worst_path} (no longer in top-{self.top_k})")
         else:
-            self.logger.info(f"Epoch {epoch + 1} - '{self.monitor}' did not improve top-{self.top_k}. Skipping checkpoint.")
+            self.logger.info(f"Epoch {epoch} - '{self.monitor}' did not improve top-{self.top_k}. Skipping checkpoint.")
