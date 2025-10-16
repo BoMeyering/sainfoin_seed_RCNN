@@ -120,6 +120,8 @@ class SupervisedTrainer(Trainer):
 			self.optimizer.zero_grad()
 			loss, loss_dict = self._train_step(batch)
 			loss.backward()
+
+			nn.utils.clip_grad_norm_(self.model.parameters(), 4.0)
 			self.optimizer.step()
 
 			p_bar.set_description(
@@ -201,7 +203,7 @@ class SupervisedTrainer(Trainer):
 		# metrics = self.metrics.compute()
 
 		# Epoch Loss Logging if not in distributed training
-		loss_dict = {"train_loss": avg_loss}
+		loss_dict = {"val_loss": avg_loss}
 		self.tb_logger.log_scalar_dict(
             main_tag="epoch_loss", scalar_dict=loss_dict, step=epoch
         )

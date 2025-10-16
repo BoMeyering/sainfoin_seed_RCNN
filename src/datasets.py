@@ -51,10 +51,10 @@ class SeedDataset(Dataset):
 
 
     def __getitem__(self, index: int):
+        """ Get one training example by index """
         img_id = self.img_ids[index]
-        img = cv2.imread(self.mapping[img_id]['path'])
-        # raw_img = img.copy()
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.imread(self.mapping[img_id]['path'], cv2.IMREAD_COLOR_RGB)
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         try:
             boxes = []
@@ -71,6 +71,7 @@ class SeedDataset(Dataset):
                 labels.append(obj['category_id'])
         except Exception as e:
             print(e)
+            return None, None
         targets['boxes'] = np.array(boxes).astype(np.float32)
         targets['labels'] = np.array(labels).astype(np.int64)
 
@@ -83,29 +84,8 @@ class SeedDataset(Dataset):
         targets['boxes'] = torch.tensor(transformed['bboxes'], dtype=torch.float32)
         targets['labels'] = torch.tensor(transformed['labels'], dtype=torch.int64)
 
-        # np_img = np.moveaxis(deepcopy(img).cpu().numpy(), source=0, destination=2)*255
-        # print(np_img.max())
-        # # np_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
-
-        # for box in targets['boxes']:
-        #     print(box)
-        #     cv2.rectangle(np_img,
-        #               (int(box[0]), int(box[1])),
-        #               (int(box[2]), int(box[3])),
-        #               (255, 255, 0),
-        #               1)
-        # cv2.namedWindow('test', cv2.WINDOW_NORMAL)
-        # cv2.imshow('test', np_img)
-        # cv2.waitKey()
-        # cv2.destroyAllWindows()
-
-
-        # print(img)
-
-
-
-
         return img, targets
     
     def __len__(self):
+        """ Get length of dataset """
         return len(self.img_ids)
