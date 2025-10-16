@@ -24,7 +24,7 @@ from src.model import create_model
 from src.transforms import collate_fn, get_train_transforms, get_val_transforms
 
 # CONFIG = 'config/basic_train_config.yaml'
-CONFIG = 'config/tb_config.yaml'
+CONFIG = 'config/basic_train_config.yaml'
 conf = OmegaConf.load(CONFIG)
 conf.base_run_name = conf.run_name
 
@@ -47,8 +47,8 @@ def main():
         logger.info(f"Create FasterRCNN model with {conf.model}")
         
         # Create optimizer and LR scheduler
-        optimizer = torch.optim.Adam(model.parameters(), **conf.optimizer)
-        # optimizer = torch.optim.SGD(model.parameters(), **conf.optimizer)
+        # optimizer = torch.optim.Adam(model.parameters(), **conf.optimizer)
+        optimizer = torch.optim.SGD(model.parameters(), **conf.optimizer)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, **conf.scheduler)
         logger.info(f"Create optimizer SGD with parameters {conf.optimizer}")
         logger.info(f"Create LR scheduler with parameters {conf.scheduler}")
@@ -68,7 +68,7 @@ def main():
         val_ds = SeedDataset(
             image_dir=conf.directories.val_dir, 
             label_dir=conf.directories.label_dir, 
-            transforms=val_transforms, 
+            transforms=val_transforms,
             subset_size=subset_size)
         
         logger.info(f"Instantiated training and validation datasets.")

@@ -162,3 +162,4 @@ cython_debug/
 manuscript
 manuscript_images
 .Rproj.user
+model_checkpoints/**/*.pth

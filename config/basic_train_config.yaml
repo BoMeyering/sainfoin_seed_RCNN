@@ -1,5 +1,5 @@
 # Basic train config
-run_name: basic_fasterrcnn
+run_name: high_lr_grad_clip
 device: cuda
 directories:
   train_dir: data/images/train
@@ -14,9 +14,9 @@ model:
   num_classes: 4 # total num object classes plus background (0)
   max_det: 500
 optimizer:
-  weight_decay: 0.00001
-  lr: 0.01
-  # momentum: 0.99
+  weight_decay: 0.000001
+  lr: 0.03
+  momentum: 0.99
 scheduler:
   gamma: 0.9
 dataloader:

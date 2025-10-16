@@ -38,6 +38,7 @@ def get_val_transforms():
     """
     return A.Compose([
         A.Normalize(normalization='min_max', max_pixel_value=255),
+        # A.Resize(1024, 1024),
         A.Lambda(image=lambda x, **kwargs: x.astype('float32')),
         ToTensorV2(p=1.0)
     ], bbox_params={
@@ -46,6 +47,12 @@ def get_val_transforms():
     })
 
 def get_inf_transforms():
+    """
+    Model inference transform function
+
+    Returns:
+        A.Compose: An Albumentations compose function for inference
+    """
     return A.Compose([
         A.Normalize(normalization='min_max', max_pixel_value=255),
         A.Lambda(image=lambda x, **kwargs: x.astype('float32')),
